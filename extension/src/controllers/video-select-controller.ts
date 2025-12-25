@@ -94,31 +94,61 @@ export default class VideoSelectController {
         targetSrc?: string,
         subtitleFiles?: SubtitleFile[]
     ) {
+        console.log('[VideoSelect] Trigger called:', {
+            openedFromMiningCommand,
+            fromAsbplayerId,
+            targetSrc,
+            hasSubtitleFiles: subtitleFiles !== undefined,
+            bindingsCount: this._bindings.length,
+            frameHidden: this._frame.hidden
+        });
+
         if (targetSrc !== undefined) {
             var binding = this._bindings.find((b) => b.video.src === targetSrc);
 
             if (binding !== undefined && binding.subscribed) {
+                console.log('[VideoSelect] Found binding for targetSrc, loading subtitles or showing dialog');
                 if (subtitleFiles !== undefined) {
                     binding.loadSubtitles(await this._filesForSubtitleFiles(subtitleFiles), false, fromAsbplayerId);
                 } else {
                     binding.showVideoDataDialog(openedFromMiningCommand, fromAsbplayerId);
                 }
+            } else {
+                console.log('[VideoSelect] No subscribed binding found for targetSrc');
             }
         } else if (this._bindings.length === 1) {
             // Special case - skip video select dialog since there is only one element
             const binding = this._bindings[0];
 
             if (binding.subscribed) {
+                console.log('[VideoSelect] Single binding found, loading subtitles or showing dialog');
                 if (subtitleFiles !== undefined) {
                     binding.loadSubtitles(await this._filesForSubtitleFiles(subtitleFiles), false);
                 } else {
-                    binding.showVideoDataDialog(openedFromMiningCommand);
+                    // Toggle: if dialog is already open, close it; otherwise open it
+                    if (!this._frame.hidden) {
+                        console.log('[VideoSelect] Dialog already open, closing it');
+                        this._hideUi();
+                    } else {
+                        console.log('[VideoSelect] Opening video data dialog');
+                        binding.showVideoDataDialog(openedFromMiningCommand);
+                    }
                 }
+            } else {
+                console.log('[VideoSelect] Single binding not subscribed');
             }
         } else if (this._bindings.length > 1) {
-            // Toggle on
-            this._showUi(openedFromMiningCommand);
-            this._subtitleFiles = subtitleFiles;
+            // Toggle: if UI is already showing, hide it; otherwise show it
+            if (!this._frame.hidden) {
+                console.log('[VideoSelect] Video select UI already open, closing it');
+                this._hideUi();
+            } else {
+                console.log('[VideoSelect] Opening video select UI');
+                this._showUi(openedFromMiningCommand);
+                this._subtitleFiles = subtitleFiles;
+            }
+        } else {
+            console.log('[VideoSelect] No bindings available');
         }
     }
 

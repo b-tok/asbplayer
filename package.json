@@ -9,10 +9,13 @@
         ]
     },
     "devDependencies": {
+        "@executeautomation/playwright-mcp-server": "^1.0.12",
         "@typescript-eslint/parser": "^8.38.0",
+        "@upstash/context7-mcp": "^1.0.33",
         "eslint": "^9.32.0",
         "eslint-plugin-react": "^7.37.5",
         "eslint-plugin-react-hooks": "^5.2.0",
+        "playwright": "^1.57.0",
         "prettier": "^3.6.2",
         "yarn-upgrade-all": "^0.7.5"
     },

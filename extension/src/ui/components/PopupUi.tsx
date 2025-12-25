@@ -12,6 +12,7 @@ import { AsbplayerSettings, SettingsProvider } from '@project/common/settings';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import { ExtensionSettingsStorage } from '../../services/extension-settings-storage';
+import { SidebarService } from '../../services/sidebar-service';
 import Popup from './Popup';
 import { useRequestingActiveTabPermission } from '../hooks/use-requesting-active-tab-permission';
 import { isMobile } from 'react-device-detect';
@@ -61,8 +62,7 @@ export function PopupUi({ commands }: Props) {
     }, [settings]);
 
     const handleOpenSidePanel = useCallback(async () => {
-        // @ts-ignore
-        browser.sidePanel.open({ windowId: (await browser.windows.getLastFocused()).id });
+        await SidebarService.open();
     }, []);
 
     const handleOpenUserGuide = useCallback(() => {

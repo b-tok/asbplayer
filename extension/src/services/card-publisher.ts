@@ -23,24 +23,37 @@ export class CardPublisher {
     }
 
     async publish(card: CardModel, postMineAction?: PostMineAction, tabId?: number, src?: string) {
+        console.log('[card-publisher.ts] publish called');
+        console.log('[card-publisher.ts] postMineAction:', postMineAction);
+        console.log('[card-publisher.ts] PostMineAction.updateLastCard value:', PostMineAction.updateLastCard);
+        console.log('[card-publisher.ts] tabId:', tabId, 'src:', src);
+
         const id = uuidv4();
         const savePromise = this._saveCardToRepository(id, card);
 
         if (tabId === undefined || src === undefined) {
+            console.log('[card-publisher.ts] tabId or src is undefined, returning early');
             return;
         }
 
         try {
             if (postMineAction == PostMineAction.showAnkiDialog) {
+                console.log('[card-publisher.ts] Showing Anki dialog');
                 this._showAnkiDialog(card, id, src, tabId);
             } else if (postMineAction == PostMineAction.updateLastCard) {
+                console.log('[card-publisher.ts] Calling _updateLastCard');
                 await this._updateLastCard(card, src, tabId);
             } else if (postMineAction === PostMineAction.exportCard) {
+                console.log('[card-publisher.ts] Exporting card');
                 await this._exportCard(card, src, tabId);
             } else if (postMineAction === PostMineAction.none) {
+                console.log('[card-publisher.ts] Notifying saved (no post-mine action)');
                 this._notifySaved(savePromise, card, src, tabId);
+            } else {
+                console.log('[card-publisher.ts] Unknown postMineAction:', postMineAction);
             }
         } catch (e) {
+            console.error('[card-publisher.ts] Error in publish:', e);
             this._notifyError(e, src, tabId);
             throw e;
         }
@@ -158,8 +171,11 @@ export class CardPublisher {
     }
 
     private async _updateLastCard(card: CardModel, src: string | undefined, tabId: number) {
+        console.log('[card-publisher.ts] _updateLastCard called');
         const ankiSettings = (await this._settingsProvider.get(ankiSettingsKeys)) as AnkiSettings;
+        console.log('[card-publisher.ts] Got anki settings, exporting card');
         const cardName = await exportCard(card, ankiSettings, 'updateLast');
+        console.log('[card-publisher.ts] Card exported to Anki, cardName:', cardName);
 
         const cardUpdatedCommand: ExtensionToVideoCommand<CardUpdatedMessage> = {
             sender: 'asbplayer-extension-to-video',
@@ -171,6 +187,10 @@ export class CardPublisher {
             src,
         };
 
+        console.log('[card-publisher.ts] Sending card-updated message to video tab');
+        console.log('[card-publisher.ts] tabId:', tabId);
+        console.log('[card-publisher.ts] src:', src);
+        console.log('[card-publisher.ts] cardUpdatedCommand:', cardUpdatedCommand);
         browser.tabs.sendMessage(tabId, cardUpdatedCommand);
     }
 

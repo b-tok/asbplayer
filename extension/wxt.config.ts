@@ -29,6 +29,13 @@ const addToPublicPathsType = (srcPath: string, destPath: string, paths: string[]
 export default defineConfig({
     modules: ['@wxt-dev/module-react'],
     srcDir: 'src',
+    vite: () => ({
+        resolve: {
+            alias: {
+                '@project/common': path.resolve(__dirname, '../common'),
+            },
+        },
+    }),
     zip: {
         sourcesRoot: '..',
         includeSources: ['.yarn/patches/**'],
@@ -161,12 +168,28 @@ export default defineConfig({
         }
 
         if (browser === 'firefox') {
-            permissions = [...permissions, 'contextMenus', 'webRequest', 'webRequestBlocking', 'clipboardWrite'];
+            permissions = [
+                ...permissions,
+                'contextMenus',
+                'webRequest',
+                'webRequestBlocking',
+                'clipboardWrite',
+                'notifications',
+                'nativeMessaging',
+            ];
 
             manifest = {
                 ...manifest,
                 host_permissions: ['<all_urls>'],
                 commands,
+                sidebar_action: {
+                    default_title: 'asbplayer',
+                    default_panel: 'sidepanel.html',
+                    default_icon: {
+                        '16': 'icon/icon16.png',
+                        '48': 'icon/icon48.png',
+                    },
+                },
                 browser_specific_settings: {
                     gecko: {
                         id: '{e4b27483-2e73-4762-b2ec-8d988a143a40}',

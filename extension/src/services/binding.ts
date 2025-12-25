@@ -16,6 +16,7 @@ import {
     NotificationDialogMessage,
     NotifyErrorMessage,
     OffsetToVideoMessage,
+    Message,
     PauseFromVideoMessage,
     PlaybackRateFromVideoMessage,
     PlaybackRateToVideoMessage,
@@ -166,6 +167,8 @@ export default class Binding {
     private videoChangeListener?: EventListener;
     private canPlayListener?: EventListener;
     private mouseMoveListener?: (event: MouseEvent) => void;
+    private autoPauseAtSubtitleEndListener?: EventListener;
+    private autoPauseSubtitleEndTime?: number;
     private listener?: (
         message: any,
         sender: Browser.runtime.MessageSender,
@@ -491,8 +494,65 @@ export default class Binding {
 
             browser.runtime.sendMessage(command);
 
-            if (this.recordingMedia && this.recordingPostMineAction !== undefined) {
-                this._toggleRecordingMedia(this.recordingPostMineAction);
+            // Check if we need to stop recording and clean up
+            if (this.recordingPostMineAction !== undefined) {
+                console.log('[binding.ts] Pause detected with recordingPostMineAction set');
+                console.log('[binding.ts] recordingState:', this.recordingState);
+
+                // If recording is still active (not yet finished), stop it
+                if (this.recordingState !== RecordingState.notRecording) {
+                    console.log('[binding.ts] Recording still active, calling _toggleRecordingMedia to stop');
+                    this._toggleRecordingMedia(this.recordingPostMineAction);
+                    // After stopping, _toggleRecordingMedia will send stop-recording message
+                    // Background will send recording-finished message
+                    // Then we'll get another pause event with recordingState = notRecording
+                    // That's when we'll clean up the state
+                    return;
+                }
+
+                // Recording has already finished (recordingState === notRecording)
+                // Now clean up state and restore play mode
+                console.log('[binding.ts] Recording already finished, cleaning up state now');
+
+                // Store values before clearing
+                const shouldResumePlayback = this.wasPlayingBeforeRecordingMedia;
+                const currentPostMinePlayback = this.postMinePlayback;
+
+                // Clear ALL state to allow next update
+                this.recordingPostMineAction = undefined;
+                this.wasPlayingBeforeRecordingMedia = undefined;
+                this.recordingMediaWithScreenshot = false;
+
+                console.log(
+                    '[binding.ts] State cleared, will restore play state. shouldResume:',
+                    shouldResumePlayback,
+                    'playbackMode:',
+                    currentPostMinePlayback
+                );
+
+                // Restore play/pause state after a short delay
+                setTimeout(() => {
+                    console.log('[binding.ts] Restoring play/pause state now');
+                    switch (currentPostMinePlayback) {
+                        case PostMinePlayback.remember:
+                            if (shouldResumePlayback) {
+                                console.log('[binding.ts] Resuming playback (remember mode, was playing)');
+                                this.play();
+                                this.mobileVideoOverlayController.hide();
+                            } else {
+                                console.log('[binding.ts] Staying paused (remember mode, was paused)');
+                            }
+                            break;
+                        case PostMinePlayback.play:
+                            console.log('[binding.ts] Resuming playback (play mode)');
+                            this.play();
+                            this.mobileVideoOverlayController.hide();
+                            break;
+                        case PostMinePlayback.pause:
+                            console.log('[binding.ts] Staying paused (pause mode)');
+                            break;
+                    }
+                }, 100);
             }
         };
 
@@ -604,7 +664,59 @@ export default class Binding {
             sender: Browser.runtime.MessageSender,
             sendResponse: (response?: any) => void
         ) => {
-            if (request.sender === 'asbplayer-extension-to-video' && request.src === this.video.src) {
+            // Helper function to normalize URLs for comparison
+            const normalizeUrl = (url: string): string | null => {
+                try {
+                    return new URL(url, window.location.href).href;
+                } catch (e) {
+                    return null;
+                }
+            };
+
+            // Log all incoming messages for debugging
+            if (request.sender === 'asbplayer-extension-to-video') {
+                console.log('[binding.ts] Received message:', request.message.command);
+                console.log('[binding.ts] request.src:', request.src);
+                console.log('[binding.ts] this.video.src:', this.video.src);
+            }
+
+            // More lenient src matching for Firefox compatibility
+            let srcMatch = false;
+            if (request.sender === 'asbplayer-extension-to-video') {
+                if (!request.src) {
+                    // No src specified in request - match any video
+                    srcMatch = true;
+                } else if (request.src === this.video.src) {
+                    // Exact match
+                    srcMatch = true;
+                    console.log('[binding.ts] src match: true (exact)');
+                } else if (request.src && this.video.src) {
+                    // Try URL normalization
+                    const normalizedRequestSrc = normalizeUrl(request.src);
+                    const normalizedVideoSrc = normalizeUrl(this.video.src);
+                    srcMatch =
+                        normalizedRequestSrc !== null &&
+                        normalizedVideoSrc !== null &&
+                        normalizedRequestSrc === normalizedVideoSrc;
+                    console.log('[binding.ts] src match:', srcMatch, '(normalized)');
+                    if (!srcMatch) {
+                        console.log('[binding.ts] URL normalization failed or URLs differ');
+                        console.log('[binding.ts] normalized request.src:', normalizedRequestSrc);
+                        console.log('[binding.ts] normalized video.src:', normalizedVideoSrc);
+                    }
+                } else {
+                    console.log('[binding.ts] src match: false (no match found)');
+                }
+            }
+
+            if (request.sender === 'asbplayer-extension-to-video' && !srcMatch) {
+                const command = (request.message && (request.message as Message).command) || undefined;
+                if (command === 'card-updated' || command === 'card-exported' || command === 'card-saved') {
+                    srcMatch = true;
+                }
+            }
+
+            if (request.sender === 'asbplayer-extension-to-video' && srcMatch) {
                 switch (request.message.command) {
                     case 'init':
                         this._notifyReady();
@@ -749,25 +861,16 @@ export default class Binding {
                         this.recordingState = RecordingState.started;
                         break;
                     case 'recording-finished':
+                        console.log('[binding.ts] recording-finished received');
+                        // Recording has finished (audio/screenshot done)
+                        // The video should already be paused (or will be paused soon) by the pauseListener
+                        // Just mark that recording is done
                         this.recordingState = RecordingState.notRecording;
                         this.recordingMediaStartedTimestamp = undefined;
 
-                        switch (this.postMinePlayback) {
-                            case PostMinePlayback.remember:
-                                if (!this.wasPlayingBeforeRecordingMedia) {
-                                    this.video.pause();
-                                } else if (!this.video.paused) {
-                                    this.mobileVideoOverlayController.hide();
-                                }
-                                break;
-                            case PostMinePlayback.play:
-                                // already playing, don't need to do anything
-                                this.mobileVideoOverlayController.hide();
-                                break;
-                            case PostMinePlayback.pause:
-                                this.video.pause();
-                                break;
-                        }
+                        // DON'T pause here - the video is already paused or being paused by natural playback end
+                        // DON'T clear recordingPostMineAction yet - pauseListener will do that
+                        console.log('[binding.ts] Recording marked as finished, waiting for pause cleanup');
                         break;
                     case 'show-anki-ui':
                         const showAnkiUiMessage = request.message as ShowAnkiUiMessage;
@@ -1092,13 +1195,21 @@ export default class Binding {
         customFieldValues,
         isBulkExport,
     }: CopySubtitleMessage) {
+        console.log('[binding.ts] _copySubtitle called, postMineAction:', postMineAction);
+        console.log('[binding.ts] recordMedia:', this.recordMedia, 'recordingMedia:', this.recordingMedia);
+        console.log('[binding.ts] recordingState:', this.recordingState);
+
         if (!subtitle || !surroundingSubtitles) {
+            console.log('[binding.ts] No subtitle or surroundingSubtitles, returning');
             return;
         }
 
         if (this.recordMedia && this.recordingMedia) {
+            console.log('[binding.ts] Already recording, returning early');
             return;
         }
+
+        console.log('[binding.ts] Proceeding with copy subtitle');
 
         if (this.copyToClipboardOnMine) {
             navigator.clipboard.writeText(subtitle.text);
@@ -1115,6 +1226,12 @@ export default class Binding {
             this.recordingMediaStartedTimestamp = this.video.currentTime * 1000;
             this.recordingMediaWithScreenshot = this.takeScreenshot;
             const start = Math.max(0, subtitle.start - this.audioPaddingStart);
+            const end = subtitle.end + this.audioPaddingEnd;
+
+            // Set up auto-pause at subtitle end
+            console.log('[binding.ts] Setting up auto-pause at subtitle end:', end / 1000, 'seconds');
+            this._setupAutoPauseAtSubtitleEnd(end);
+
             this.seek(start / 1000);
             await this.play();
         }
@@ -1234,12 +1351,54 @@ export default class Binding {
         );
     }
 
+    private _setupAutoPauseAtSubtitleEnd(endTimeMs: number) {
+        // Remove any existing auto-pause listener
+        this._clearAutoPauseAtSubtitleEnd();
+
+        // Store the end time
+        this.autoPauseSubtitleEndTime = endTimeMs;
+
+        // Create listener that checks if we've reached subtitle end
+        this.autoPauseAtSubtitleEndListener = () => {
+            const currentTimeMs = this.video.currentTime * 1000;
+
+            if (this.autoPauseSubtitleEndTime && currentTimeMs >= this.autoPauseSubtitleEndTime) {
+                console.log('[binding.ts] Reached subtitle end time, pausing video at', currentTimeMs / 1000);
+                console.log('[binding.ts] Target end time was', this.autoPauseSubtitleEndTime / 1000);
+
+                // Clear the listener first
+                this._clearAutoPauseAtSubtitleEnd();
+
+                // Pause the video (this will trigger pauseListener which will clean up state)
+                this.video.pause();
+            }
+        };
+
+        // Add the listener to video timeupdate event
+        this.video.addEventListener('timeupdate', this.autoPauseAtSubtitleEndListener);
+        console.log('[binding.ts] Auto-pause listener added for subtitle end');
+    }
+
+    private _clearAutoPauseAtSubtitleEnd() {
+        if (this.autoPauseAtSubtitleEndListener) {
+            console.log('[binding.ts] Clearing auto-pause listener');
+            this.video.removeEventListener('timeupdate', this.autoPauseAtSubtitleEndListener);
+            this.autoPauseAtSubtitleEndListener = undefined;
+            this.autoPauseSubtitleEndTime = undefined;
+        }
+    }
+
     async _prepareScreenshot() {
         if (this.cleanScreenshot) {
             this.notificationController.hide();
             this.subtitleController.forceHideSubtitles = true;
             this.mobileVideoOverlayController.forceHide = true;
             await this.controlsController.hide();
+
+            // Wait for subtitles to be actually hidden before screenshot
+            // Firefox needs at least 150ms to ensure the subtitle rendering interval (100ms) has run
+            // and subtitles are fully hidden
+            await new Promise((resolve) => setTimeout(resolve, Math.max(150, this.imageDelay)));
         }
     }
 

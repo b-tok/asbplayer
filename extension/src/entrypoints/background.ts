@@ -50,7 +50,7 @@ import BulkExportCancellationHandler from '@/handlers/asbplayerv2/bulk-export-ca
 import BulkExportStartedHandler from '@/handlers/asbplayerv2/bulk-export-started-handler';
 import { bindWebSocketClient, unbindWebSocketClient } from '@/services/web-socket-client-binding';
 import { isFirefoxBuild } from '@/services/build-flags';
-import { CaptureStreamAudioRecorder, OffscreenAudioRecorder } from '@/services/audio-recorder-delegate';
+import { CaptureStreamAudioRecorder, OffscreenAudioRecorder, FirefoxAudioRecorder } from '@/services/audio-recorder-delegate';
 import RequestModelHandler from '@/handlers/mobile-overlay/request-model-handler';
 import CurrentTabHandler from '@/handlers/mobile-overlay/current-tab-handler';
 import UpdateMobileOverlayModelHandler from '@/handlers/video/update-mobile-overlay-model-handler';
@@ -119,7 +119,7 @@ export default defineBackground(() => {
     const tabRegistry = new TabRegistry(settings);
     const audioRecorder = new AudioRecorderService(
         tabRegistry,
-        isFirefoxBuild ? new CaptureStreamAudioRecorder() : new OffscreenAudioRecorder()
+        isFirefoxBuild ? new FirefoxAudioRecorder() : new OffscreenAudioRecorder()
     );
     const imageCapturer = new ImageCapturer(settings);
     const cardPublisher = new CardPublisher(settings);
@@ -171,73 +171,155 @@ export default defineBackground(() => {
     ];
 
     browser.runtime.onMessage.addListener((request: Command<Message>, sender, sendResponse) => {
+        console.log('[Background] Received message:', {
+            sender: request.sender,
+            command: request.message?.command,
+            from: sender.tab?.id,
+            url: sender.url
+        });
+
         for (const handler of handlers) {
             if (
                 (typeof handler.sender === 'string' && handler.sender === request.sender) ||
                 (typeof handler.sender === 'object' && handler.sender.includes(request.sender))
             ) {
                 if (handler.command === null || handler.command === request.message.command) {
-                    if (handler.handle(request, sender, sendResponse) === true) {
+                    console.log('[Background] Handling with:', handler.constructor.name);
+                    const result = handler.handle(request, sender, sendResponse);
+                    if (result === true) {
+                        console.log('[Background] Handler will send async response');
                         return true;
                     }
-
+                    console.log('[Background] Handler completed synchronously');
                     break;
                 }
             }
         }
     });
 
-    browser.runtime.onInstalled.addListener(() => {
-        browser.contextMenus?.create({
-            id: 'load-subtitles',
-            title: browser.i18n.getMessage('contextMenuLoadSubtitles'),
-            contexts: ['page', 'video'],
-        });
+    // Context menu setup - Firefox uses browser.menus, Chrome uses browser.contextMenus
+    const contextMenusAPI = browser.contextMenus || (browser as any).menus;
 
-        browser.contextMenus?.create({
-            id: 'mine-subtitle',
-            title: browser.i18n.getMessage('contextMenuMineSubtitle'),
-            contexts: ['page', 'video'],
-        });
+    console.log('[Background] Context menus API available:', !!contextMenusAPI);
+    console.log('[Background] browser.contextMenus:', !!browser.contextMenus);
+    console.log('[Background] browser.menus:', !!(browser as any).menus);
+
+    // Setup context menus - do this immediately on background script load
+    const setupContextMenus = async () => {
+        console.log('[Background] Setting up context menus');
+
+        if (!contextMenusAPI) {
+            console.error('[Background] Context menus API not available');
+            return;
+        }
+
+        try {
+            // Remove any existing menus to avoid duplicates
+            console.log('[Background] Removing existing context menus');
+            await contextMenusAPI.removeAll();
+
+            // Firefox uses different contexts than Chrome
+            // Chrome: ['page', 'video']
+            // Firefox: ['page', 'video', 'audio', 'all']
+            const contexts = isFirefoxBuild
+                ? ['page', 'video', 'audio', 'all'] as any
+                : ['page', 'video'] as any;
+
+            console.log('[Background] Creating load-subtitles context menu with contexts:', contexts);
+            contextMenusAPI.create({
+                id: 'load-subtitles',
+                title: browser.i18n.getMessage('contextMenuLoadSubtitles') || 'asbplayer: Load subtitles',
+                contexts: contexts,
+            }, () => {
+                if (browser.runtime.lastError) {
+                    console.error('[Background] Error creating load-subtitles menu:', browser.runtime.lastError);
+                } else {
+                    console.log('[Background] Created load-subtitles menu successfully');
+                }
+            });
+
+            console.log('[Background] Creating mine-subtitle context menu with contexts:', contexts);
+            contextMenusAPI.create({
+                id: 'mine-subtitle',
+                title: browser.i18n.getMessage('contextMenuMineSubtitle') || 'asbplayer: Mine subtitle',
+                contexts: contexts,
+            }, () => {
+                if (browser.runtime.lastError) {
+                    console.error('[Background] Error creating mine-subtitle menu:', browser.runtime.lastError);
+                } else {
+                    console.log('[Background] Created mine-subtitle menu successfully');
+                }
+            });
+
+            console.log('[Background] Context menu setup completed');
+        } catch (error) {
+            console.error('[Background] Error creating context menus:', error);
+        }
+    };
+
+    // Setup immediately
+    setupContextMenus();
+
+    // Also setup on install/update
+    browser.runtime.onInstalled.addListener(() => {
+        console.log('[Background] onInstalled triggered, setting up context menus');
+        setupContextMenus();
     });
 
-    browser.contextMenus?.onClicked.addListener((info) => {
-        if (info.menuItemId === 'load-subtitles') {
-            const toggleVideoSelectCommand: ExtensionToVideoCommand<ToggleVideoSelectMessage> = {
-                sender: 'asbplayer-extension-to-video',
-                message: {
-                    command: 'toggle-video-select',
-                },
-            };
-            tabRegistry.publishCommandToVideoElementTabs((tab): ExtensionToVideoCommand<Message> | undefined => {
-                if (info.pageUrl !== tab.url) {
-                    return undefined;
-                }
-
-                return toggleVideoSelectCommand;
+    if (contextMenusAPI) {
+        contextMenusAPI.onClicked.addListener((info: any) => {
+            console.log('[Background] Context menu clicked:', {
+                menuItemId: info.menuItemId,
+                pageUrl: info.pageUrl,
+                srcUrl: info.srcUrl,
+                frameUrl: info.frameUrl,
+                mediaType: info.mediaType
             });
-        } else if (info.menuItemId === 'mine-subtitle') {
-            tabRegistry.publishCommandToVideoElements((videoElement): ExtensionToVideoCommand<Message> | undefined => {
-                if (info.srcUrl !== undefined && videoElement.src !== info.srcUrl) {
-                    return undefined;
-                }
 
-                if (info.srcUrl === undefined && info.pageUrl !== videoElement.tab.url) {
-                    return undefined;
-                }
-
-                const copySubtitleCommand: ExtensionToVideoCommand<CopySubtitleMessage> = {
+            if (info.menuItemId === 'load-subtitles') {
+                console.log('[Background] Load subtitles menu clicked, publishing command');
+                const toggleVideoSelectCommand: ExtensionToVideoCommand<ToggleVideoSelectMessage> = {
                     sender: 'asbplayer-extension-to-video',
                     message: {
-                        command: 'copy-subtitle',
-                        postMineAction: PostMineAction.showAnkiDialog,
+                        command: 'toggle-video-select',
                     },
-                    src: videoElement.src,
                 };
-                return copySubtitleCommand;
-            });
-        }
-    });
+                tabRegistry.publishCommandToVideoElementTabs((tab): ExtensionToVideoCommand<Message> | undefined => {
+                    if (info.pageUrl !== tab.url) {
+                        console.log('[Background] Skipping tab - URL mismatch:', tab.url, 'vs', info.pageUrl);
+                        return undefined;
+                    }
+
+                    console.log('[Background] Publishing toggle-video-select to tab:', tab.id);
+                    return toggleVideoSelectCommand;
+                });
+            } else if (info.menuItemId === 'mine-subtitle') {
+                console.log('[Background] Mine subtitle menu clicked, publishing command');
+                tabRegistry.publishCommandToVideoElements((videoElement): ExtensionToVideoCommand<Message> | undefined => {
+                    if (info.srcUrl !== undefined && videoElement.src !== info.srcUrl) {
+                        console.log('[Background] Skipping video - srcUrl mismatch:', videoElement.src, 'vs', info.srcUrl);
+                        return undefined;
+                    }
+
+                    if (info.srcUrl === undefined && info.pageUrl !== videoElement.tab.url) {
+                        console.log('[Background] Skipping video - pageUrl mismatch:', videoElement.tab.url, 'vs', info.pageUrl);
+                        return undefined;
+                    }
+
+                    console.log('[Background] Publishing copy-subtitle to video element:', videoElement.src);
+                    const copySubtitleCommand: ExtensionToVideoCommand<CopySubtitleMessage> = {
+                        sender: 'asbplayer-extension-to-video',
+                        message: {
+                            command: 'copy-subtitle',
+                            postMineAction: PostMineAction.showAnkiDialog,
+                        },
+                        src: videoElement.src,
+                    };
+                    return copySubtitleCommand;
+                });
+            }
+        });
+    }
 
     browser.commands?.onCommand.addListener((command) => {
         browser.tabs.query({ active: true, currentWindow: true }, (tabs) => {

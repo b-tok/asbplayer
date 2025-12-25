@@ -154,9 +154,15 @@ export default class RecordMediaHandler {
             ...messageWithoutBulkFlag,
         };
 
+        console.log('[record-media-handler.ts] Card created, ready to publish');
+        console.log('[record-media-handler.ts] isBulkExport:', isBulkExport);
+        console.log('[record-media-handler.ts] postMineAction:', recordMediaCommand.message.postMineAction);
+
         if (isBulkExport) {
+            console.log('[record-media-handler.ts] Publishing bulk');
             this._cardPublisher.publishBulk(card, senderTab.id!, recordMediaCommand.src);
         } else {
+            console.log('[record-media-handler.ts] Publishing with postMineAction');
             this._cardPublisher.publish(
                 card,
                 recordMediaCommand.message.postMineAction,

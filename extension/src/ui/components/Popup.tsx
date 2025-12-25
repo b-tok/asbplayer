@@ -14,7 +14,6 @@ import { Anki } from '@project/common/anki';
 import { useSupportedLanguages } from '../hooks/use-supported-languages';
 import { useI18n } from '../hooks/use-i18n';
 import { isMobile } from 'react-device-detect';
-import { isFirefoxBuild } from '../../services/build-flags';
 import { useTheme } from '@mui/material/styles';
 import SettingsProfileSelectMenu from '@project/common/components/SettingsProfileSelectMenu';
 import { settingsPageConfigs } from '@/services/pages';
@@ -86,7 +85,7 @@ const Popup = ({
                     <Button variant="contained" color="primary" startIcon={<LaunchIcon />} onClick={onOpenApp}>
                         {t('action.openApp')}
                     </Button>
-                    {!isMobile && !isFirefoxBuild && (
+                    {!isMobile && (
                         <Button variant="contained" color="primary" startIcon={<PanelIcon />} onClick={onOpenSidePanel}>
                             {t('action.openSidePanel')}
                         </Button>
@@ -107,7 +106,7 @@ const Popup = ({
                         extensionVersion={browser.runtime.getManifest().version}
                         extensionSupportsAppIntegration
                         extensionSupportsOverlay
-                        extensionSupportsSidePanel={!isFirefoxBuild}
+                        extensionSupportsSidePanel
                         extensionSupportsOrderableAnkiFields
                         extensionSupportsTrackSpecificSettings
                         extensionSupportsSubtitlesWidthSetting

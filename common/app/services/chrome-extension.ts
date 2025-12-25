@@ -187,7 +187,7 @@ export default class ChromeExtension {
     }
 
     get supportsSidePanel() {
-        return this.installed && !isFirefox && !isMobile && gte(this.version, '1.0.0');
+        return this.installed && !isMobile && gte(this.version, '1.0.0');
     }
 
     get supportsAppIntegration() {

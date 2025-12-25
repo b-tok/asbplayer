@@ -1,5 +1,7 @@
 import { CloseSidePanelMessage, Command, ExtensionToAsbPlayerCommand, Message } from '@project/common';
 import TabRegistry from '../../services/tab-registry';
+import { SidebarService } from '../../services/sidebar-service';
+import { isFirefoxBuild } from '../../services/build-flags';
 
 export default class ToggleSidePanelHandler {
     private readonly _tabRegistry: TabRegistry;
@@ -16,6 +18,13 @@ export default class ToggleSidePanelHandler {
     }
 
     handle(command: Command<Message>, sender: Browser.runtime.MessageSender) {
+        // Firefox has built-in toggle support
+        if (isFirefoxBuild) {
+            SidebarService.toggle();
+            return false;
+        }
+
+        // Chrome requires custom toggle logic via message passing
         let sidePanelOpen = false;
         this._tabRegistry.publishCommandToAsbplayers({
             commandFactory: (asbplayer) => {
@@ -36,9 +45,7 @@ export default class ToggleSidePanelHandler {
         });
 
         if (!sidePanelOpen) {
-            browser.windows
-                // @ts-ignore
-                .getLastFocused((window) => browser.sidePanel.open({ windowId: window.id }));
+            SidebarService.open();
         }
 
         return false;

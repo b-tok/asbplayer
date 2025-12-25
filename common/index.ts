@@ -6,3 +6,4 @@ export * from './src/message';
 export * from './src/fetcher';
 export { default as AutoPauseContext } from './src/auto-pause-context';
 export { default as OffscreenDomCache } from './src/offscreen-dom-cache';
+export * from './theme/theme';

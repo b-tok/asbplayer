@@ -36,6 +36,13 @@ export default class AudioRecorderService {
     constructor(tabRegistry: TabRegistry, delegate: AudioRecorderDelegate) {
         this._tabRegistry = tabRegistry;
         this._delegate = delegate;
+
+        // Set up callback for delegates that support it (like NativeMessagingAudioRecorder)
+        if ('setOnAudioCallback' in delegate && typeof delegate.setOnAudioCallback === 'function') {
+            (delegate as any).setOnAudioCallback((base64: string, requestId: string) => {
+                this.onAudioBase64(base64, requestId);
+            });
+        }
     }
 
     onAudioBase64(base64: string, requestId: string) {
@@ -50,17 +57,29 @@ export default class AudioRecorderService {
 
     async startWithTimeout(time: number, encodeAsMp3: boolean, requester: Requester): Promise<string> {
         const requestId = uuidv4();
+        console.log('[AudioRecorderService] startWithTimeout called', { time, encodeAsMp3, requestId, requester });
 
         try {
+            console.log('[AudioRecorderService] Calling delegate.startWithTimeout');
             const response = await this._delegate.startWithTimeout(time, encodeAsMp3, requestId, requester);
+            console.log('[AudioRecorderService] Delegate response:', response);
 
             if (response.started) {
+                console.log('[AudioRecorderService] Recording started successfully');
                 this._notifyRecordingStarted(requester);
-                return await this._prepareForAudioDataResponse(requestId);
+                console.log('[AudioRecorderService] Waiting for audio data...');
+                const audioData = await this._prepareForAudioDataResponse(requestId);
+                console.log('[AudioRecorderService] Audio data received, length:', audioData?.length || 0);
+                return audioData;
             }
 
+            console.error('[AudioRecorderService] Recording failed to start:', response.error);
             throw this._handleStartError(response, requester);
+        } catch (e) {
+            console.error('[AudioRecorderService] Error in startWithTimeout:', e);
+            throw e;
         } finally {
+            console.log('[AudioRecorderService] Notifying recording finished');
             this._notifyRecordingFinished(requester);
         }
     }
