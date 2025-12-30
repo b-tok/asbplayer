@@ -355,7 +355,7 @@ export class FirefoxAudioRecorder implements AudioRecorderDelegate {
                 this.notificationShown = true;
                 await showNotification(
                     'asbplayer-linux: Native Audio Host Required',
-                    'To record audio from DRM-protected content, install the native messaging host. See: https://github.com/b-tok/asbplayer/tree/main/native-messaging-host'
+                    'To record audio from DRM-protected content, install the native messaging host. See: https://github.com/b-tok/asbplayer-linux/tree/main/native-messaging-host'
                 );
             }
 

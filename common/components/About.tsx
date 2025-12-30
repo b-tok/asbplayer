@@ -207,7 +207,7 @@ const About = ({ appVersion, extensionVersion }: Props) => {
             <Box style={{ width: '100%', textAlign: 'center' }}>
                 <LogoIcon style={{ width: 48, height: 48 }} />
                 <br />
-                <Link variant="h5" href="https://github.com/b-tok/asbplayer">
+                <Link variant="h5" href="https://github.com/b-tok/asbplayer-linux">
                     asbplayer-linux
                 </Link>
                 <br />
@@ -215,7 +215,9 @@ const About = ({ appVersion, extensionVersion }: Props) => {
                     <>
                         <Typography variant="caption">
                             {t('about.appVersion')}{' '}
-                            <Link href={`https://github.com/b-tok/asbplayer/commit/${appVersion}`}>{appVersion}</Link>
+                            <Link href={`https://github.com/b-tok/asbplayer-linux/commit/${appVersion}`}>
+                                {appVersion}
+                            </Link>
                         </Typography>
                         <br />
                     </>
@@ -223,7 +225,7 @@ const About = ({ appVersion, extensionVersion }: Props) => {
                 {extensionVersion && (
                     <Typography variant="caption">
                         {t('about.extensionVersion')}{' '}
-                        <Link href={`https://github.com/b-tok/asbplayer/releases/tag/v${extensionVersion}`}>
+                        <Link href={`https://github.com/b-tok/asbplayer-linux/releases/tag/v${extensionVersion}`}>
                             {extensionVersion}
                         </Link>
                     </Typography>

@@ -26,7 +26,7 @@ asbplayer's complete user guide is [here](https://docs.asbplayer.dev/docs/intro)
 3. Install the [AnkiConnect](https://ankiweb.net/shared/info/2055492159) plugin for Anki.
 4. [Configure](https://docs.asbplayer.dev/docs/intro) asbplayer-linux to create cards via AnkiConnect using your deck and note type.
 5. Enhance a video using asbplayer and subtitle files.
-    - **For streaming video:** After installing the [browser extension](https://github.com/b-tok/asbplayer/releases/latest), drag-and-drop a subtitle file into the streaming video you want to mine.
+    - **For streaming video:** After installing the [browser extension](https://github.com/b-tok/asbplayer-linux/releases/latest), drag-and-drop a subtitle file into the streaming video you want to mine.
     - **For local files:** Drag-and-drop media/subtitle files into the [asbplayer website](https://docs.asbplayer.dev/docs/intro).
 
     You may have to [adjust the subtitle offset](https://docs.asbplayer.dev/docs/guides/subtitle-timing) to get the subtitles in sync.
