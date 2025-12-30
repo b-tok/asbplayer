@@ -184,7 +184,8 @@ export class NativeMessagingAudioRecorder implements AudioRecorderDelegate {
                     started: false,
                     error: {
                         code: StartRecordingErrorCode.other,
-                        message: 'Native messaging host not installed. See extension documentation for installation instructions.',
+                        message:
+                            'Native messaging host not installed. See extension documentation for installation instructions.',
                     },
                 };
             }
@@ -353,8 +354,8 @@ export class FirefoxAudioRecorder implements AudioRecorderDelegate {
                 console.warn('[FirefoxAudioRecorder] Native host not available, showing notification');
                 this.notificationShown = true;
                 await showNotification(
-                    'asbplayer: Native Audio Host Required',
-                    'To record audio from DRM-protected content, install the native messaging host. See: https://github.com/killergerbah/asbplayer/tree/main/native-messaging-host'
+                    'asbplayer-linux: Native Audio Host Required',
+                    'To record audio from DRM-protected content, install the native messaging host. See: https://github.com/b-tok/asbplayer/tree/main/native-messaging-host'
                 );
             }
 
@@ -379,7 +380,7 @@ export class FirefoxAudioRecorder implements AudioRecorderDelegate {
 
         // Check if it's a DRM error
         if (captureStreamResponse.error?.code === StartRecordingErrorCode.drmProtected) {
-            console.log('[FirefoxAudioRecorder] DRM detected, but native messaging doesn\'t support manual recording');
+            console.log("[FirefoxAudioRecorder] DRM detected, but native messaging doesn't support manual recording");
             // Native messaging doesn't support manual start/stop
             return captureStreamResponse;
         }

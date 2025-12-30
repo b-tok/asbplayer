@@ -54,7 +54,7 @@ export default defineConfig({
     },
     manifest: ({ browser, mode }) => {
         let manifest: UserManifest = {
-            name: 'asbplayer: Language-learning with subtitles',
+            name: 'asbplayer-linux: Language-learning with subtitles',
             description: '__MSG_extensionDescription__',
             version: '1.13.0',
             action: { default_title: 'asbplayer' },
@@ -192,9 +192,11 @@ export default defineConfig({
                 },
                 browser_specific_settings: {
                     gecko: {
-                        id: '{e4b27483-2e73-4762-b2ec-8d988a143a40}',
-                        update_url: 'https://b-tok.github.io/asbplayer/firefox-extension-updates.json',
-                    },
+                        id: '{b788dcf3-c35a-46ac-9602-91c3e60f7543}',
+                        data_collection_permissions: {
+                            required: ['none'],
+                        } as any,
+                    } as any,
                 },
             };
         }
@@ -207,8 +209,11 @@ export default defineConfig({
                 host_permissions: ['<all_urls>'],
                 browser_specific_settings: {
                     gecko: {
-                        id: '{49de9206-c73e-4829-be4d-bda770d7f4b5}',
-                    },
+                        id: '{915d7672-272b-4eba-8fd0-f4bd37f9022f}',
+                        data_collection_permissions: {
+                            required: ['none'],
+                        } as any,
+                    } as any,
                     gecko_android: {},
                 },
             };

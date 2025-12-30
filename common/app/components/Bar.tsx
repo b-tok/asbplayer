@@ -239,36 +239,6 @@ export default function Bar({
                             </ListItemButton>
                         </ListItem>
                     </Link>
-                    <Link href="https://github.com/killergerbah/asbplayer/issues">
-                        <ListItem disablePadding>
-                            <ListItemButton>
-                                <ListItemIcon>
-                                    <BugReportIcon />
-                                </ListItemIcon>
-                                <ListItemText primary={t('bar.submitIssue')!} />
-                            </ListItemButton>
-                        </ListItem>
-                    </Link>
-                    {lastError && (
-                        <ListItem disablePadding>
-                            <ListItemButton onClick={handleCopyLastError}>
-                                <ListItemIcon>
-                                    <ErrorIcon />
-                                </ListItemIcon>
-                                <ListItemText primary={t('bar.copyLastError')!} />
-                            </ListItemButton>
-                        </ListItem>
-                    )}
-                    <Link href="https://github.com/killergerbah/asbplayer#donations">
-                        <ListItem disablePadding>
-                            <ListItemButton>
-                                <ListItemIcon>
-                                    <FavoriteIcon />
-                                </ListItemIcon>
-                                <ListItemText primary={t('bar.donate')!} />
-                            </ListItemButton>
-                        </ListItem>
-                    </Link>
                 </List>
             </Popover>
         </>

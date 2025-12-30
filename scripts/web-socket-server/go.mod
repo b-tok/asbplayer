@@ -1,4 +1,4 @@
-module github.com/killergerbah/asbplayer/web-socket-server
+module github.com/b-tok/asbplayer/web-socket-server
 
 go 1.21
 
