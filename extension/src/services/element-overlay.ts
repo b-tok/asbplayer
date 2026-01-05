@@ -1,5 +1,9 @@
 import { OffscreenDomCache } from '@project/common';
 
+function getFullscreenElement(): Element | null {
+    return document.fullscreenElement ?? (document as any).mozFullScreenElement ?? null;
+}
+
 export enum OffsetAnchor {
     bottom,
     top,
@@ -106,9 +110,10 @@ export class CachingElementOverlay implements ElementOverlay {
     }
 
     get containerElement() {
-        if (document.fullscreenElement && this.fullscreenContainerElement !== undefined) {
+        const fullscreenElement = getFullscreenElement();
+        if (fullscreenElement && this.fullscreenContainerElement !== undefined) {
             return this.fullscreenContainerElement;
-        } else if (!document.fullscreenElement && this.nonFullscreenContainerElement !== undefined) {
+        } else if (!fullscreenElement && this.nonFullscreenContainerElement !== undefined) {
             return this.nonFullscreenContainerElement;
         }
 
@@ -128,7 +133,7 @@ export class CachingElementOverlay implements ElementOverlay {
     }
 
     setHtml(htmls: KeyedHtml[]) {
-        if (document.fullscreenElement) {
+        if (getFullscreenElement()) {
             this._displayFullscreenContentElementsWithHtml(htmls);
         } else {
             this._displayNonFullscreenContentElementsWithHtml(htmls);
@@ -171,7 +176,7 @@ export class CachingElementOverlay implements ElementOverlay {
         document.body.appendChild(container);
 
         const toggle = () => {
-            if (document.fullscreenElement) {
+            if (getFullscreenElement()) {
                 container.style.setProperty('display', 'none', 'important');
             } else {
                 container.style.display = '';
@@ -187,6 +192,7 @@ export class CachingElementOverlay implements ElementOverlay {
         this.nonFullscreenStylesInterval = setInterval(() => this._applyContainerStyles(container), 1000);
         this.nonFullscreenElementFullscreenPollingInterval = setInterval(() => toggle(), 1000);
         document.addEventListener('fullscreenchange', this.nonFullscreenElementFullscreenChangeListener);
+        document.addEventListener('mozfullscreenchange', this.nonFullscreenElementFullscreenChangeListener);
         this.nonFullscreenContainerElement = container;
         return container;
     }
@@ -200,31 +206,64 @@ export class CachingElementOverlay implements ElementOverlay {
         container.className = this.fullscreenContainerClassName;
         container.onmouseover = this.onMouseOver;
         this._applyContainerStyles(container);
-        this._findFullscreenParentElement(container).appendChild(container);
+
+        const fullscreenElement = getFullscreenElement();
+        const targetParent = this.targetElement.parentElement;
+        let appended = false;
+
+        if (
+            fullscreenElement &&
+            fullscreenElement instanceof HTMLElement &&
+            fullscreenElement.contains(this.targetElement)
+        ) {
+            fullscreenElement.appendChild(container);
+            appended = true;
+        }
+
+        if (!appended) {
+            const parent = this._findFullscreenParentElement(container);
+            parent?.appendChild(container);
+        }
+
         container.style.setProperty('display', 'none', 'important');
         const that = this;
 
         const toggle = () => {
-            if (document.fullscreenElement) {
+            if (getFullscreenElement()) {
                 if (container.style.display === 'none') {
                     container.style.display = '';
+                    const oldParent = container.parentElement;
                     container.remove();
-                    that._findFullscreenParentElement(container).appendChild(container);
-                }
+                    const newParent = that._findFullscreenParentElement(container);
+                    if (newParent) {
+                        try {
+                            newParent.appendChild(container);
+                        } catch (e) {
+                            const fsElement = getFullscreenElement();
+                            if (fsElement instanceof HTMLElement) {
+                                fsElement.appendChild(container);
+                            }
+                        }
+                    }
 
-                if (this.nonFullscreenContainerElement) {
-                    this._transferChildren(this.nonFullscreenContainerElement, container);
+                    if (this.nonFullscreenContainerElement) {
+                        this._transferChildren(this.nonFullscreenContainerElement, container);
+                    }
                 }
-            } else if (!document.fullscreenElement) {
+            } else if (!getFullscreenElement()) {
                 container.style.setProperty('display', 'none', 'important');
             }
         };
 
         toggle();
-        this.fullscreenElementFullscreenChangeListener = (e) => toggle();
+        this.fullscreenElementFullscreenChangeListener = (e) => {
+            toggle();
+        };
+
         this.fullscreenStylesInterval = setInterval(() => this._applyContainerStyles(container), 1000);
-        this.fullscreenElementFullscreenPollingInterval = setInterval(() => toggle(), 1000);
+        this.fullscreenElementFullscreenPollingInterval = setInterval(() => toggle(), 100);
         document.addEventListener('fullscreenchange', this.fullscreenElementFullscreenChangeListener);
+        document.addEventListener('mozfullscreenchange', this.fullscreenElementFullscreenChangeListener);
         this.fullscreenContainerElement = container;
         return this.fullscreenContainerElement;
     }
@@ -298,7 +337,7 @@ export class CachingElementOverlay implements ElementOverlay {
     }
 
     appendHtml(html: string) {
-        if (document.fullscreenElement) {
+        if (getFullscreenElement()) {
             this._appendHtml(`${html}\n`, this.fullscreenContentClassName, this._fullscreenContainerElement());
         } else {
             this._appendHtml(`${html}\n`, this.nonFullscreenContentClassName, this._nonFullscreenContainerElement());
@@ -327,6 +366,7 @@ export class CachingElementOverlay implements ElementOverlay {
     hide() {
         if (this.nonFullscreenElementFullscreenChangeListener) {
             document.removeEventListener('fullscreenchange', this.nonFullscreenElementFullscreenChangeListener);
+            document.removeEventListener('mozfullscreenchange', this.nonFullscreenElementFullscreenChangeListener);
         }
 
         if (this.nonFullscreenStylesInterval) {
@@ -339,6 +379,7 @@ export class CachingElementOverlay implements ElementOverlay {
 
         if (this.fullscreenElementFullscreenChangeListener) {
             document.removeEventListener('fullscreenchange', this.fullscreenElementFullscreenChangeListener);
+            document.removeEventListener('mozfullscreenchange', this.fullscreenElementFullscreenChangeListener);
         }
 
         if (this.fullscreenStylesInterval) {
@@ -360,6 +401,15 @@ export class CachingElementOverlay implements ElementOverlay {
     private _applyContainerStyles(container: HTMLElement) {
         const rect = this.targetElement.getBoundingClientRect();
         container.style.left = rect.left + rect.width / 2 + 'px';
+
+        // Force z-index to appear on top in fullscreen mode
+        if (getFullscreenElement()) {
+            container.style.setProperty('z-index', '999999999', 'important');
+            container.style.position = 'fixed';
+        } else {
+            container.style.zIndex = '';
+            container.style.position = '';
+        }
 
         if (this.contentWidthPercentage === -1) {
             container.style.maxWidth = rect.width + 'px';

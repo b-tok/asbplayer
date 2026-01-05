@@ -73,11 +73,24 @@ export const useMobileVideoOverlayModel = ({ location }: Params) => {
             sender: Browser.runtime.MessageSender,
             sendResponse?: (message: any) => void
         ) => {
-            if (message.sender !== 'asbplayer-video-to-mobile-overlay' || message.src !== location.src) {
+            if (message.sender !== 'asbplayer-video-to-mobile-overlay') {
+                return;
+            }
+
+            const messageSrc = message.src;
+            const locationSrc = location.src;
+
+            if (!messageSrc || !locationSrc || messageSrc !== locationSrc) {
+                console.log('[use-mobile-video-overlay-model] Message src mismatch:', {
+                    messageSrc,
+                    locationSrc,
+                    messageSender: message.sender,
+                });
                 return;
             }
 
             const command = message as VideoToMobileOverlayCommand<UpdateMobileOverlayModelMessage>;
+            console.log('[use-mobile-video-overlay-model] Received model update:', command.message.model);
             setModel(command.message.model);
         };
         browser.runtime.onMessage.addListener(listener);

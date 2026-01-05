@@ -549,7 +549,8 @@ export interface StartRecordingResponse {
 
 export enum StopRecordingErrorCode {
     timedAudioRecordingInProgress = 1,
-    other = 2,
+    noRecording = 2,
+    other = 3,
 }
 
 export interface StopRecordingResponse {

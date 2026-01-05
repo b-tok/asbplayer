@@ -50,7 +50,11 @@ import BulkExportCancellationHandler from '@/handlers/asbplayerv2/bulk-export-ca
 import BulkExportStartedHandler from '@/handlers/asbplayerv2/bulk-export-started-handler';
 import { bindWebSocketClient, unbindWebSocketClient } from '@/services/web-socket-client-binding';
 import { isFirefoxBuild } from '@/services/build-flags';
-import { CaptureStreamAudioRecorder, OffscreenAudioRecorder, FirefoxAudioRecorder } from '@/services/audio-recorder-delegate';
+import {
+    CaptureStreamAudioRecorder,
+    OffscreenAudioRecorder,
+    FirefoxAudioRecorder,
+} from '@/services/audio-recorder-delegate';
 import RequestModelHandler from '@/handlers/mobile-overlay/request-model-handler';
 import CurrentTabHandler from '@/handlers/mobile-overlay/current-tab-handler';
 import UpdateMobileOverlayModelHandler from '@/handlers/video/update-mobile-overlay-model-handler';
@@ -73,8 +77,21 @@ export default defineBackground(() => {
 
     const settings = new SettingsProvider(new ExtensionSettingsStorage());
 
+    console.log('[background.ts] === Extension loading ===');
+    console.log('[background.ts] Browser type:', isFirefoxBuild ? 'Firefox' : 'Chrome');
+    console.log('[background.ts] isFirefoxBuild:', isFirefoxBuild);
+    console.log('[background.ts] isChrome:', !isFirefoxBuild);
+
     const startListener = async () => {
-        primeLocalization(await settings.getSingle('language'));
+        console.log('[background.ts] onStartup called');
+        console.log('[background.ts] Browser type:', isFirefoxBuild ? 'Firefox' : 'Chrome');
+        console.log(
+            '[background.ts] Initializing audio recorder:',
+            isFirefoxBuild ? 'FirefoxAudioRecorder' : 'OffscreenAudioRecorder'
+        );
+
+        browser.runtime.onStartup.addListener(startListener);
+        isFirefoxBuild ? new FirefoxAudioRecorder() : new OffscreenAudioRecorder();
     };
 
     const installListener = async (details: Browser.runtime.InstalledDetails) => {
@@ -175,7 +192,7 @@ export default defineBackground(() => {
             sender: request.sender,
             command: request.message?.command,
             from: sender.tab?.id,
-            url: sender.url
+            url: sender.url,
         });
 
         for (const handler of handlers) {
@@ -221,35 +238,39 @@ export default defineBackground(() => {
             // Firefox uses different contexts than Chrome
             // Chrome: ['page', 'video']
             // Firefox: ['page', 'video', 'audio', 'all']
-            const contexts = isFirefoxBuild
-                ? ['page', 'video', 'audio', 'all'] as any
-                : ['page', 'video'] as any;
+            const contexts = isFirefoxBuild ? (['page', 'video', 'audio', 'all'] as any) : (['page', 'video'] as any);
 
             console.log('[Background] Creating load-subtitles context menu with contexts:', contexts);
-            contextMenusAPI.create({
-                id: 'load-subtitles',
-                title: browser.i18n.getMessage('contextMenuLoadSubtitles') || 'asbplayer: Load subtitles',
-                contexts: contexts,
-            }, () => {
-                if (browser.runtime.lastError) {
-                    console.error('[Background] Error creating load-subtitles menu:', browser.runtime.lastError);
-                } else {
-                    console.log('[Background] Created load-subtitles menu successfully');
+            contextMenusAPI.create(
+                {
+                    id: 'load-subtitles',
+                    title: browser.i18n.getMessage('contextMenuLoadSubtitles') || 'asbplayer: Load subtitles',
+                    contexts: contexts,
+                },
+                () => {
+                    if (browser.runtime.lastError) {
+                        console.error('[Background] Error creating load-subtitles menu:', browser.runtime.lastError);
+                    } else {
+                        console.log('[Background] Created load-subtitles menu successfully');
+                    }
                 }
-            });
+            );
 
             console.log('[Background] Creating mine-subtitle context menu with contexts:', contexts);
-            contextMenusAPI.create({
-                id: 'mine-subtitle',
-                title: browser.i18n.getMessage('contextMenuMineSubtitle') || 'asbplayer: Mine subtitle',
-                contexts: contexts,
-            }, () => {
-                if (browser.runtime.lastError) {
-                    console.error('[Background] Error creating mine-subtitle menu:', browser.runtime.lastError);
-                } else {
-                    console.log('[Background] Created mine-subtitle menu successfully');
+            contextMenusAPI.create(
+                {
+                    id: 'mine-subtitle',
+                    title: browser.i18n.getMessage('contextMenuMineSubtitle') || 'asbplayer: Mine subtitle',
+                    contexts: contexts,
+                },
+                () => {
+                    if (browser.runtime.lastError) {
+                        console.error('[Background] Error creating mine-subtitle menu:', browser.runtime.lastError);
+                    } else {
+                        console.log('[Background] Created mine-subtitle menu successfully');
+                    }
                 }
-            });
+            );
 
             console.log('[Background] Context menu setup completed');
         } catch (error) {
@@ -273,7 +294,7 @@ export default defineBackground(() => {
                 pageUrl: info.pageUrl,
                 srcUrl: info.srcUrl,
                 frameUrl: info.frameUrl,
-                mediaType: info.mediaType
+                mediaType: info.mediaType,
             });
 
             if (info.menuItemId === 'load-subtitles') {
@@ -295,28 +316,40 @@ export default defineBackground(() => {
                 });
             } else if (info.menuItemId === 'mine-subtitle') {
                 console.log('[Background] Mine subtitle menu clicked, publishing command');
-                tabRegistry.publishCommandToVideoElements((videoElement): ExtensionToVideoCommand<Message> | undefined => {
-                    if (info.srcUrl !== undefined && videoElement.src !== info.srcUrl) {
-                        console.log('[Background] Skipping video - srcUrl mismatch:', videoElement.src, 'vs', info.srcUrl);
-                        return undefined;
-                    }
+                tabRegistry.publishCommandToVideoElements(
+                    (videoElement): ExtensionToVideoCommand<Message> | undefined => {
+                        if (info.srcUrl !== undefined && videoElement.src !== info.srcUrl) {
+                            console.log(
+                                '[Background] Skipping video - srcUrl mismatch:',
+                                videoElement.src,
+                                'vs',
+                                info.srcUrl
+                            );
+                            return undefined;
+                        }
 
-                    if (info.srcUrl === undefined && info.pageUrl !== videoElement.tab.url) {
-                        console.log('[Background] Skipping video - pageUrl mismatch:', videoElement.tab.url, 'vs', info.pageUrl);
-                        return undefined;
-                    }
+                        if (info.srcUrl === undefined && info.pageUrl !== videoElement.tab.url) {
+                            console.log(
+                                '[Background] Skipping video - pageUrl mismatch:',
+                                videoElement.tab.url,
+                                'vs',
+                                info.pageUrl
+                            );
+                            return undefined;
+                        }
 
-                    console.log('[Background] Publishing copy-subtitle to video element:', videoElement.src);
-                    const copySubtitleCommand: ExtensionToVideoCommand<CopySubtitleMessage> = {
-                        sender: 'asbplayer-extension-to-video',
-                        message: {
-                            command: 'copy-subtitle',
-                            postMineAction: PostMineAction.showAnkiDialog,
-                        },
-                        src: videoElement.src,
-                    };
-                    return copySubtitleCommand;
-                });
+                        console.log('[Background] Publishing copy-subtitle to video element:', videoElement.src);
+                        const copySubtitleCommand: ExtensionToVideoCommand<CopySubtitleMessage> = {
+                            sender: 'asbplayer-extension-to-video',
+                            message: {
+                                command: 'copy-subtitle',
+                                postMineAction: PostMineAction.showAnkiDialog,
+                            },
+                            src: videoElement.src,
+                        };
+                        return copySubtitleCommand;
+                    }
+                );
             }
         });
     }

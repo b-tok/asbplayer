@@ -141,6 +141,12 @@ export class MobileVideoOverlayController {
 
     async updateModel() {
         if (!this._bound || !this._uiInitialized) {
+            console.log(
+                '[mobile-video-overlay] updateModel skipped - bound:',
+                this._bound,
+                'uiInitialized:',
+                this._uiInitialized
+            );
             return;
         }
 
@@ -153,6 +159,11 @@ export class MobileVideoOverlayController {
             },
             src: this._context.video.src,
         };
+        console.log('[mobile-video-overlay] Sending model update:', {
+            subtitles: model.subtitleDisplaying,
+            recording: model.recording,
+            emptyTrack: model.emptySubtitleTrack,
+        });
         browser.runtime.sendMessage(command);
     }
 
@@ -173,7 +184,10 @@ export class MobileVideoOverlayController {
             playbackRate: this._context.video.playbackRate,
             emptySubtitleTrack: subtitles.length === 0,
             recordingEnabled: this._context.recordMedia,
-            recording: this._context.recordingMedia,
+            recording:
+                this._context.recordingState !== undefined && this._context.recordingState !== null
+                    ? this._context.recordingState === 1
+                    : false,
             previousSubtitleTimestamp: adjacentSubtitle(false, timestamp, subtitles)?.originalStart ?? undefined,
             nextSubtitleTimestamp: adjacentSubtitle(true, timestamp, subtitles)?.originalStart ?? undefined,
             currentTimestamp: timestamp,

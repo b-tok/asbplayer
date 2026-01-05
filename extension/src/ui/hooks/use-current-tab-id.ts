@@ -15,7 +15,7 @@ export const useCurrentTabId = () => {
                 console.log('[useCurrentTabId] Found windows:', windows.length);
 
                 // Find the focused window
-                const focusedWindow = windows.find(w => w.focused);
+                const focusedWindow = windows.find((w) => w.focused);
                 const targetWindowId = focusedWindow?.id ?? windows[0]?.id;
 
                 console.log('[useCurrentTabId] Target window ID:', targetWindowId);
@@ -28,10 +28,14 @@ export const useCurrentTabId = () => {
                 // Query for active tab in the target window
                 const tabs = await browser.tabs.query({
                     active: true,
-                    windowId: targetWindowId
+                    windowId: targetWindowId,
                 });
 
-                console.log('[useCurrentTabId] Found tabs:', tabs.length, tabs.map(t => ({ id: t.id, url: t.url })));
+                console.log(
+                    '[useCurrentTabId] Found tabs:',
+                    tabs.length,
+                    tabs.map((t) => ({ id: t.id, url: t.url }))
+                );
 
                 if (tabs.length > 0 && tabs[0].id !== undefined) {
                     console.log('[useCurrentTabId] Setting currentTabId to:', tabs[0].id);

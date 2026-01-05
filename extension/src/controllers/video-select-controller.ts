@@ -100,7 +100,7 @@ export default class VideoSelectController {
             targetSrc,
             hasSubtitleFiles: subtitleFiles !== undefined,
             bindingsCount: this._bindings.length,
-            frameHidden: this._frame.hidden
+            frameHidden: this._frame.hidden,
         });
 
         if (targetSrc !== undefined) {

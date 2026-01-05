@@ -24,13 +24,16 @@ const setupMessageRelay = () => {
 
                 // If there's a response with a messageId, send it back to the page
                 if (response && command.message.messageId) {
-                    window.postMessage({
-                        sender: 'asbplayer-extension-to-player',
-                        message: {
-                            response: response,
-                            messageId: command.message.messageId,
+                    window.postMessage(
+                        {
+                            sender: 'asbplayer-extension-to-player',
+                            message: {
+                                response: response,
+                                messageId: command.message.messageId,
+                            },
                         },
-                    }, '*');
+                        '*'
+                    );
                 }
             } catch (error) {
                 console.error('[SidePanel] Error relaying message:', error);
@@ -76,15 +79,17 @@ const initializeExtension = async () => {
         });
 
         console.log('[SidePanel] Requesting page config...');
-        const pageConfigPromise = browser.runtime.sendMessage({
-            sender: 'asbplayerv2',
-            message: {
-                command: 'page-config',
-            },
-        }).catch((error) => {
-            console.warn('[SidePanel] Page config not available:', error);
-            return undefined;
-        });
+        const pageConfigPromise = browser.runtime
+            .sendMessage({
+                sender: 'asbplayerv2',
+                message: {
+                    command: 'page-config',
+                },
+            })
+            .catch((error) => {
+                console.warn('[SidePanel] Page config not available:', error);
+                return undefined;
+            });
 
         const commands = await commandsPromise;
         console.log('[SidePanel] Got commands:', commands);
@@ -94,15 +99,18 @@ const initializeExtension = async () => {
 
         const manifest = browser.runtime.getManifest();
 
-        window.postMessage({
-            sender: 'asbplayer-extension-to-player',
-            message: {
-                command: 'version',
-                version: manifest.version,
-                extensionCommands: commands,
-                pageConfig: pageConfig,
+        window.postMessage(
+            {
+                sender: 'asbplayer-extension-to-player',
+                message: {
+                    command: 'version',
+                    version: manifest.version,
+                    extensionCommands: commands,
+                    pageConfig: pageConfig,
+                },
             },
-        }, '*');
+            '*'
+        );
 
         console.log('[SidePanel] Version message posted');
     } catch (error) {
@@ -111,15 +119,18 @@ const initializeExtension = async () => {
 
         // Try to render UI anyway with default values
         const manifest = browser.runtime.getManifest();
-        window.postMessage({
-            sender: 'asbplayer-extension-to-player',
-            message: {
-                command: 'version',
-                version: manifest.version,
-                extensionCommands: {},
-                pageConfig: undefined,
+        window.postMessage(
+            {
+                sender: 'asbplayer-extension-to-player',
+                message: {
+                    command: 'version',
+                    version: manifest.version,
+                    extensionCommands: {},
+                    pageConfig: undefined,
+                },
             },
-        }, '*');
+            '*'
+        );
         console.log('[SidePanel] Posted default version message after error');
     }
 };
