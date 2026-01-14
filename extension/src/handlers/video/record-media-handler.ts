@@ -44,8 +44,12 @@ export default class RecordMediaHandler {
     }
 
     async handle(command: Command<Message>, sender: Browser.runtime.MessageSender) {
+        console.log('[record-media-handler.ts] handle() called');
         const senderTab = sender.tab!;
         const recordMediaCommand = command as VideoToExtensionCommand<RecordMediaAndForwardSubtitleMessage>;
+        console.log('[record-media-handler.ts] postMineAction:', recordMediaCommand.message.postMineAction);
+        console.log('[record-media-handler.ts] record:', recordMediaCommand.message.record);
+        console.log('[record-media-handler.ts] screenshot:', recordMediaCommand.message.screenshot);
         await this._recordAndForward(recordMediaCommand, sender, senderTab);
     }
 
@@ -66,14 +70,18 @@ export default class RecordMediaHandler {
                 (subtitle.end - subtitle.start) / recordMediaCommand.message.playbackRate +
                 recordMediaCommand.message.audioPaddingEnd;
 
+            console.log('[record-media-handler.ts] Starting audio recording, time:', time);
+
             if (recordMediaCommand.message.postMineAction !== PostMineAction.showAnkiDialog) {
                 encodeAsMp3 = await this._settingsProvider.getSingle('preferMp3');
             }
 
+            console.log('[record-media-handler.ts] Calling audioRecorder.startWithTimeout, encodeAsMp3:', encodeAsMp3);
             audioPromise = this._audioRecorder.startWithTimeout(time, encodeAsMp3, {
                 src: recordMediaCommand.src,
                 tabId: sender.tab?.id!,
             });
+            console.log('[record-media-handler.ts] audioPromise created');
         }
 
         if (recordMediaCommand.message.screenshot) {
@@ -97,6 +105,7 @@ export default class RecordMediaHandler {
         }
 
         if (audioPromise) {
+            console.log('[record-media-handler.ts] Waiting for audio promise...');
             const {
                 audioPaddingStart: paddingStart,
                 audioPaddingEnd: paddingEnd,
@@ -112,11 +121,13 @@ export default class RecordMediaHandler {
 
             try {
                 const audioBase64 = await audioPromise;
+                console.log('[record-media-handler.ts] Audio recording completed, length:', audioBase64?.length || 0);
                 audioModel = {
                     ...baseAudioModel,
                     base64: audioBase64,
                 };
             } catch (e) {
+                console.error('[record-media-handler.ts] Audio recording error:', e);
                 if (!(e instanceof DrmProtectedStreamError)) {
                     throw e;
                 }

@@ -155,6 +155,7 @@ export default class AudioRecorderService {
     }
 
     private _notifyRecordingStarted({ tabId, src }: Requester) {
+        console.log('[AudioRecorderService] _notifyRecordingStarted called, tabId:', tabId, 'src:', src);
         const command: ExtensionToAsbPlayerCommand<RecordingStartedMessage> = {
             sender: 'asbplayer-extension-to-player',
             message: {
@@ -171,10 +172,12 @@ export default class AudioRecorderService {
             },
             src,
         };
+        console.log('[AudioRecorderService] Sending recording-started to tab:', tabId);
         browser.tabs.sendMessage(tabId, videoCommand);
     }
 
     private _notifyRecordingFinished({ tabId, src }: Requester) {
+        console.log('[AudioRecorderService] _notifyRecordingFinished called, tabId:', tabId, 'src:', src);
         const playerCommand: ExtensionToAsbPlayerCommand<RecordingFinishedMessage> = {
             sender: 'asbplayer-extension-to-player',
             message: {
@@ -191,6 +194,7 @@ export default class AudioRecorderService {
             },
             src,
         };
+        console.log('[AudioRecorderService] Sending recording-finished to tab:', tabId);
         browser.tabs.sendMessage(tabId, videoCommand);
     }
 

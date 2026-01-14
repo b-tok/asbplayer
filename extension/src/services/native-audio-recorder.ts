@@ -86,12 +86,14 @@ export class NativeAudioRecorder {
      * Send a message to the native messaging host and wait for response
      */
     private async sendMessage(message: any): Promise<any> {
+        console.log('[NativeAudioRecorder] sendMessage called with command:', message.command);
         return new Promise((resolve, reject) => {
             let port: Browser.runtime.Port;
 
             try {
                 console.log('[NativeAudioRecorder] Connecting to native host:', NATIVE_HOST_NAME);
                 port = browser.runtime.connectNative(NATIVE_HOST_NAME);
+                console.log('[NativeAudioRecorder] connectNative returned, port:', !!port);
             } catch (error) {
                 console.error('[NativeAudioRecorder] Failed to connect:', error);
                 reject(new Error(`Failed to connect to native host: ${error}`));
@@ -99,13 +101,17 @@ export class NativeAudioRecorder {
             }
 
             const timeout = setTimeout(() => {
+                console.error('[NativeAudioRecorder] Response timeout after 60 seconds');
                 port.disconnect();
                 reject(new Error('Native host response timeout'));
             }, 60000); // 60 second timeout for recording
 
+            let responseReceived = false;
+
             port.onMessage.addListener((response) => {
+                responseReceived = true;
                 clearTimeout(timeout);
-                console.log('[NativeAudioRecorder] Received response');
+                console.log('[NativeAudioRecorder] Received response:', JSON.stringify(response).substring(0, 200));
                 port.disconnect();
                 resolve(response);
             });
@@ -116,14 +122,29 @@ export class NativeAudioRecorder {
                 if (error) {
                     console.error('[NativeAudioRecorder] Native host disconnected with error:', error);
                     reject(new Error(`Native host error: ${error.message}`));
+                } else if (!responseReceived) {
+                    // Host disconnected without sending a response - this is an error
+                    console.error('[NativeAudioRecorder] Native host disconnected without sending a response');
+                    reject(
+                        new Error(
+                            'Native host disconnected without sending a response. Check that the native host is properly installed and working.'
+                        )
+                    );
                 } else {
-                    // This might happen if the native host exits normally after sending response
-                    console.log('[NativeAudioRecorder] Native host disconnected');
+                    // Normal disconnect after response was received
+                    console.log('[NativeAudioRecorder] Native host disconnected normally after response');
                 }
             });
 
             console.log('[NativeAudioRecorder] Sending message:', message.command);
-            port.postMessage(message);
+            try {
+                port.postMessage(message);
+                console.log('[NativeAudioRecorder] Message sent successfully');
+            } catch (e) {
+                console.error('[NativeAudioRecorder] Error sending message:', e);
+                clearTimeout(timeout);
+                reject(e);
+            }
         });
     }
 

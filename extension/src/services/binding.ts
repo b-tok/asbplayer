@@ -96,17 +96,32 @@ enum RecordingState {
 const startAudioRecordingErrorResponse: (e: any) => StartRecordingResponse = (e: any) => {
     let errorCode: StartRecordingErrorCode;
 
-    if (e.name === 'NS_ERROR_FAILURE') {
+    console.log('[binding.ts] startAudioRecordingErrorResponse called with error:', {
+        name: e.name,
+        message: e.message,
+        toString: String(e),
+        result: e.result,
+    });
+
+    // Check for NS_ERROR_FAILURE in multiple ways since Firefox may report it differently
+    const isDrmError =
+        e.name === 'NS_ERROR_FAILURE' ||
+        String(e).includes('NS_ERROR_FAILURE') ||
+        e.message?.includes('NS_ERROR_FAILURE');
+
+    if (isDrmError) {
+        console.log('[binding.ts] Detected DRM error, setting errorCode to drmProtected');
         errorCode = StartRecordingErrorCode.drmProtected;
     } else {
-        console.error(e);
+        console.error('[binding.ts] Non-DRM error:', e);
         errorCode = StartRecordingErrorCode.other;
     }
 
     const errorResponse: StartRecordingResponse = {
         started: false,
-        error: { code: errorCode, message: e.message },
+        error: { code: errorCode, message: e.message || String(e) },
     };
+    console.log('[binding.ts] Returning error response:', errorResponse);
     return errorResponse;
 };
 
@@ -678,6 +693,14 @@ export default class Binding {
                 console.log('[binding.ts] Received message:', request.message.command);
                 console.log('[binding.ts] request.src:', request.src);
                 console.log('[binding.ts] this.video.src:', this.video.src);
+
+                // Extra logging for recording messages
+                if (
+                    request.message.command === 'recording-started' ||
+                    request.message.command === 'recording-finished'
+                ) {
+                    console.log('[binding.ts] Recording state message received!', request.message.command);
+                }
             }
 
             // More lenient src matching for Firefox compatibility
@@ -952,30 +975,48 @@ export default class Binding {
                         this.showVideoDataDialog(false);
                         break;
                     case 'start-recording-audio-with-timeout':
+                        console.log('[binding.ts] start-recording-audio-with-timeout handler starting');
                         const startRecordingAudioWithTimeoutMessage =
                             request.message as StartRecordingAudioWithTimeoutViaCaptureStreamMessage;
 
                         this._captureStream()
-                            .then((stream) =>
-                                this._audioRecorder
-                                    .stopSafely(true)
-                                    .then(() =>
-                                        this._audioRecorder.startWithTimeout(
-                                            stream,
-                                            startRecordingAudioWithTimeoutMessage.timeout,
-                                            () => sendResponse({ started: true }),
-                                            true
-                                        )
-                                    )
-                            )
-                            .then((audioBase64) =>
-                                this._sendAudioBase64(
+                            .then((stream) => {
+                                console.log(
+                                    '[binding.ts] _captureStream succeeded, got stream with',
+                                    stream.getAudioTracks().length,
+                                    'audio tracks'
+                                );
+                                return this._audioRecorder.stopSafely(true).then(() => {
+                                    console.log(
+                                        '[binding.ts] stopSafely completed, starting recording with timeout:',
+                                        startRecordingAudioWithTimeoutMessage.timeout
+                                    );
+                                    return this._audioRecorder.startWithTimeout(
+                                        stream,
+                                        startRecordingAudioWithTimeoutMessage.timeout,
+                                        () => {
+                                            console.log(
+                                                '[binding.ts] startWithTimeout onStarted callback, sending response'
+                                            );
+                                            sendResponse({ started: true });
+                                        },
+                                        true
+                                    );
+                                });
+                            })
+                            .then((audioBase64) => {
+                                console.log(
+                                    '[binding.ts] Audio recording completed, base64 length:',
+                                    audioBase64?.length || 0
+                                );
+                                return this._sendAudioBase64(
                                     audioBase64,
                                     startRecordingAudioWithTimeoutMessage.requestId,
                                     startRecordingAudioWithTimeoutMessage.encodeAsMp3
-                                )
-                            )
+                                );
+                            })
                             .catch((e) => {
+                                console.error('[binding.ts] start-recording-audio-with-timeout error:', e);
                                 sendResponse(startAudioRecordingErrorResponse(e));
                             });
                         return true;
@@ -1685,30 +1726,52 @@ export default class Binding {
     }
 
     private _captureStream(): Promise<MediaStream> {
+        console.log('[binding.ts] _captureStream called');
         return new Promise((resolve, reject) => {
             const existingStream = this._existingActiveAudioStream();
 
             if (existingStream !== undefined) {
+                console.log('[binding.ts] _captureStream: using existing active stream');
                 resolve(existingStream);
                 return;
             }
 
             try {
                 let stream: MediaStream | undefined;
+                console.log('[binding.ts] _captureStream: checking for captureStream methods on video element');
+                console.log(
+                    '[binding.ts] _captureStream: video.captureStream exists:',
+                    typeof (this.video as any).captureStream === 'function'
+                );
+                console.log(
+                    '[binding.ts] _captureStream: video.mozCaptureStreamUntilEnded exists:',
+                    typeof (this.video as any).mozCaptureStreamUntilEnded === 'function'
+                );
 
                 if (typeof (this.video as any).captureStream === 'function') {
+                    console.log('[binding.ts] _captureStream: calling video.captureStream()');
                     stream = (this.video as any).captureStream();
+                    console.log('[binding.ts] _captureStream: captureStream returned:', stream);
                 }
 
-                if (typeof (this.video as any).mozCaptureStreamUntilEnded === 'function') {
+                if (stream === undefined && typeof (this.video as any).mozCaptureStreamUntilEnded === 'function') {
+                    console.log('[binding.ts] _captureStream: calling video.mozCaptureStreamUntilEnded()');
                     stream = (this.video as any).mozCaptureStreamUntilEnded();
+                    console.log('[binding.ts] _captureStream: mozCaptureStreamUntilEnded returned:', stream);
                 }
 
                 if (stream === undefined) {
+                    console.error('[binding.ts] _captureStream: unable to capture stream, both methods failed');
                     reject(new Error('Unable to capture stream from audio'));
                     return;
                 }
 
+                console.log(
+                    '[binding.ts] _captureStream: got stream, video tracks:',
+                    stream.getVideoTracks().length,
+                    'audio tracks:',
+                    stream.getAudioTracks().length
+                );
                 const audioStream = new MediaStream();
 
                 for (const track of stream.getVideoTracks()) {
@@ -1716,10 +1779,24 @@ export default class Binding {
                 }
 
                 for (const track of stream.getAudioTracks()) {
+                    console.log(
+                        '[binding.ts] _captureStream: audio track enabled:',
+                        track.enabled,
+                        'muted:',
+                        track.muted,
+                        'readyState:',
+                        track.readyState
+                    );
                     if (track.enabled) {
                         audioStream.addTrack(track);
                     }
                 }
+
+                console.log(
+                    '[binding.ts] _captureStream: audioStream has',
+                    audioStream.getAudioTracks().length,
+                    'tracks'
+                );
 
                 // Ensure audio keeps playing through computer speakers
                 const output = new AudioContext();
@@ -1727,8 +1804,10 @@ export default class Binding {
                 source.connect(output.destination);
 
                 this.audioStream = audioStream;
+                console.log('[binding.ts] _captureStream: success, resolving with audioStream');
                 resolve(audioStream);
             } catch (e) {
+                console.error('[binding.ts] _captureStream: exception:', e);
                 reject(e);
             }
         });
